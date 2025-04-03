@@ -200,48 +200,44 @@ fn ui<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &App) {
 
 // Draw the file tree with indentation
 fn draw_file_tree<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &App, area: Rect) {
-    let mut in_collapse = false;
-    let mut collapse_depth = None;
+    let mut collapsed_stack = Vec::new();
+    let mut lines = Vec::new();
 
-    let items: Vec<String> = app
-        .file_list
-        .iter()
-        .enumerate()
-        .map(|(idx, entry)| {
-            let indentation = " ".repeat(entry.depth * 2);
-            let filename = entry.path.split('/').last().unwrap_or("UNKNOWN");
-
-            if let EntryType::Directory(ref dir_state) = entry.entry_type {
-                if !dir_state.expanded {
-                    in_collapse = true;
-                    collapse_depth = Some(entry.depth);
-                }
-            }
-
-            if in_collapse {
-                if entry.depth > collapse_depth.unwrap() {
-                    return String::new(); // Skip rendering this entry
-                } else {
-                    in_collapse = false; // Reset for next entries
-                    collapse_depth = None; // Reset collapse depth
-                }
-            }
-
-            if idx == app.selected_file_idx {
-                // Highlight selected entry
-                format!("> {} {}", indentation, filename)
+    for (idx, entry) in app.file_list.iter().enumerate() {
+        // Pop from the stack if we've gone back above a collapsed directory's depth.
+        while let Some(&collapsed_depth) = collapsed_stack.last() {
+            if entry.depth <= collapsed_depth {
+                collapsed_stack.pop();
             } else {
-                format!("  {} {}", indentation, filename)
+                break;
             }
-        })
-        .collect();
+        }
 
-    let text = items
-        .iter()
-        .filter(|s| !s.is_empty())
-        .cloned()
-        .collect::<Vec<String>>()
-        .join("\n");
+        // If we're still within a collapsed parent, skip
+        if !collapsed_stack.is_empty() {
+            continue;
+        }
+
+        // Otherwise, we render this entry
+        let indentation = " ".repeat(entry.depth * 2);
+        let filename = entry.path.split('/').last().unwrap_or("UNKNOWN");
+        let line = if idx == app.selected_file_idx {
+            format!("> {} {}", indentation, filename)
+        } else {
+            format!("  {} {}", indentation, filename)
+        };
+        lines.push(line);
+
+        // If *this* entry is a collapsed directory, push its depth
+        if let EntryType::Directory(ref dir_state) = entry.entry_type {
+            if !dir_state.expanded {
+                collapsed_stack.push(entry.depth);
+            }
+        }
+    }
+
+    let text = lines.join("\n");
+
     let block = Block::default().borders(Borders::ALL).title("File Tree");
     let paragraph = Paragraph::new(text)
         .block(block)
