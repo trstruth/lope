@@ -85,6 +85,25 @@ impl State {
         }
         visible
     }
+
+    pub fn get_included_entries(&self) -> Vec<String> {
+        self.file_list
+            .iter()
+            .filter(|entry| !entry.excluded)
+            .map(|entry| entry.path.clone())
+            .collect()
+    }
+
+    pub fn get_entire_tree(&self) -> String {
+        let mut tree = String::new();
+        for entry in &self.file_list {
+            let indentation = " ".repeat(entry.depth * 2);
+            let filename = entry.path.clone();
+            let checked_or_not = if entry.excluded { "" } else { "* " };
+            tree.push_str(&format!("{}{}{}\n", indentation, checked_or_not, filename));
+        }
+        tree
+    }
 }
 
 impl InputHandler for State {
