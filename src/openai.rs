@@ -61,7 +61,7 @@ struct Chat {
 impl Chat {
     fn new_from_query(query: &str) -> Self {
         Chat {
-            model: "gpt-4".to_owned(),
+            model: "gpt-4o-2024-11-20".to_owned(),
             messages: vec![
                 Message {
                     role: Role::System,
