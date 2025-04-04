@@ -1,3 +1,5 @@
+use crossterm::event::KeyCode;
+
 use crate::input::InputHandler;
 
 pub struct State {
@@ -25,12 +27,16 @@ impl Default for State {
 impl InputHandler for State {
     fn process_key(&mut self, input: crossterm::event::KeyEvent) -> Option<crate::input::Action> {
         match input.code {
-            crossterm::event::KeyCode::Char(c) => {
+            KeyCode::Char(c) => {
                 self.prompt_text.push(c);
                 None
             }
-            crossterm::event::KeyCode::Backspace => {
+            KeyCode::Backspace => {
                 self.prompt_text.pop();
+                None
+            }
+            KeyCode::Enter => {
+                self.prompt_text.push('\n');
                 None
             }
             _ => None,

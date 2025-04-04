@@ -3,18 +3,18 @@ use crate::input::{Action, InputHandler};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub struct State {
-    selected_option: AppOptions,
+    selected_option: AppOption,
 }
 
 impl State {
     pub fn new() -> Self {
         Self {
-            selected_option: AppOptions::Send,
+            selected_option: AppOption::Send,
         }
     }
 
-    pub fn get_display_text(&self) -> String {
-        "[Send]  [Quit]".to_owned()
+    pub fn selected_option(&self) -> AppOption {
+        self.selected_option
     }
 }
 
@@ -27,19 +27,19 @@ impl Default for State {
 impl InputHandler for State {
     fn process_key(&mut self, input: KeyEvent) -> Option<Action> {
         match input.code {
-            KeyCode::Left => {
-                self.selected_option = AppOptions::Send;
+            KeyCode::Char('h') => {
+                self.selected_option = AppOption::Send;
                 None
             }
-            KeyCode::Right => {
-                self.selected_option = AppOptions::Quit;
+            KeyCode::Char('l') => {
+                self.selected_option = AppOption::Quit;
                 None
             }
             KeyCode::Enter => {
                 // Handle the selected option
                 match self.selected_option {
-                    AppOptions::Send => Some(Action::Send),
-                    AppOptions::Quit => Some(Action::Quit),
+                    AppOption::Send => Some(Action::Send),
+                    AppOption::Quit => Some(Action::Quit),
                 }
             }
             _ => None,
@@ -49,7 +49,8 @@ impl InputHandler for State {
     fn process_tick(&mut self) {}
 }
 
-pub enum AppOptions {
+#[derive(PartialEq, Clone, Copy)]
+pub enum AppOption {
     Send,
     Quit,
 }

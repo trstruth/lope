@@ -12,14 +12,19 @@ use tui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
+    text::{Span, Spans},
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
     Terminal,
 };
 
 use lope::{
-    input::Action,
-    input::InputHandler,
-    widgets::{file_browser, options, prompt_editor},
+    input::{Action, InputHandler},
+    theme,
+    widgets::{
+        file_browser,
+        options::{self, AppOption},
+        prompt_editor,
+    },
 };
 
 // App state
@@ -197,7 +202,7 @@ fn draw_file_tree<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &mut App
     let mut block = Block::default().borders(Borders::ALL).title("File Browser");
 
     if app.selected_widget == Widget::FileBrowser {
-        block = block.border_type(BorderType::Thick);
+        block = block.border_type(BorderType::Thick)
     }
 
     let visible_idxs = app.file_browser_state.visible_entries();
@@ -215,7 +220,13 @@ fn draw_file_tree<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &mut App
     // 2. Build the `List` widget
     let list = List::new(items)
         .block(block)
-        .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+        .style(Style::default().bg(theme::GRAY))
+        .highlight_style(
+            Style::default()
+                .fg(theme::YELLOW) // yellow
+                .bg(theme::LIGHT_GREY)
+                .add_modifier(Modifier::BOLD),
+        )
         .highlight_symbol("> ");
 
     // 3. Render with the `list_state` to track selection
@@ -232,7 +243,7 @@ fn draw_prompt_editor<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &App
     }
     let paragraph = Paragraph::new(app.prompt_editor_state.get_display_text())
         .block(block)
-        .style(Style::default().fg(Color::Yellow));
+        .style(Style::default().fg(theme::LIGHT_GREEN).bg(theme::GRAY));
     f.render_widget(paragraph, area);
 }
 
@@ -241,16 +252,42 @@ fn draw_bottom_options<B: tui::backend::Backend>(
     app: &App,
     area: tui::layout::Rect,
 ) {
-    let mut block = Block::default().borders(Borders::ALL).title("Options");
+    let mut block = Block::default()
+        .borders(Borders::ALL)
+        .title("Options")
+        .style(Style::default().bg(theme::GRAY));
     if app.selected_widget == Widget::Options {
-        block = block.border_type(BorderType::Thick);
+        block = block.border_type(BorderType::Thick)
     }
 
-    // Center the text within the block
-    let paragraph = Paragraph::new(app.options_state.get_display_text())
+    let spans = vec![
+        if app.options_state.selected_option() == AppOption::Send {
+            Span::styled(
+                "[Send]",
+                Style::default()
+                    .fg(theme::BLUE)
+                    .add_modifier(Modifier::REVERSED),
+            )
+        } else {
+            Span::raw("[Send]")
+        },
+        Span::raw("  "), // spacing
+        if app.options_state.selected_option() == AppOption::Quit {
+            Span::styled(
+                "[Quit]",
+                Style::default()
+                    .fg(theme::PURPLE)
+                    .add_modifier(Modifier::REVERSED),
+            )
+        } else {
+            Span::raw("[Quit]")
+        },
+    ];
+
+    let paragraph = Paragraph::new(Spans::from(spans))
         .block(block)
-        .style(Style::default().fg(Color::Green))
-        .alignment(Alignment::Center);
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Gray));
 
     f.render_widget(paragraph, area);
 }
