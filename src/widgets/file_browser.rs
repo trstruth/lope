@@ -90,13 +90,13 @@ impl State {
 impl InputHandler for State {
     fn process_key(&mut self, input: KeyEvent) -> Option<crate::input::Action> {
         match input.code {
-            KeyCode::Up => {
+            KeyCode::Char('k') => {
                 self.decrement_selected();
             }
-            KeyCode::Down => {
+            KeyCode::Char('j') => {
                 self.increment_selected();
             }
-            KeyCode::Right => {
+            KeyCode::Char('l') => {
                 let selected_idx = self.get_selected_idx().unwrap_or(0);
                 if let Some(entry) = self.file_list.get_mut(selected_idx) {
                     if let EntryType::Directory(ref mut dir_state) = entry.entry_type {
@@ -104,11 +104,20 @@ impl InputHandler for State {
                     }
                 }
             }
-            KeyCode::Left => {
+            KeyCode::Char('h') => {
                 let selected_idx = self.get_selected_idx().unwrap_or(0);
                 if let Some(entry) = self.file_list.get_mut(selected_idx) {
                     if let EntryType::Directory(ref mut dir_state) = entry.entry_type {
                         dir_state.expanded = false;
+                    }
+                }
+            }
+            KeyCode::Enter => {
+                let selected_idx = self.get_selected_idx().unwrap_or(0);
+                if let Some(entry) = self.file_list.get_mut(selected_idx) {
+                    // TODO: implement proper directory handling
+                    if let EntryType::File = entry.entry_type {
+                        entry.excluded = !entry.excluded;
                     }
                 }
             }
@@ -137,7 +146,7 @@ impl TreeEntry {
                 true => EntryType::Directory(DirectoryState { expanded: true }),
                 false => EntryType::File,
             },
-            excluded: false,
+            excluded: true, // exclude by default
         }
     }
 }

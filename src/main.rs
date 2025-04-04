@@ -207,7 +207,8 @@ fn draw_file_tree<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &mut App
             let entry = &app.file_browser_state.file_list[idx];
             let indentation = " ".repeat(entry.depth * 2);
             let filename = entry.path.split('/').last().unwrap_or("UNKNOWN");
-            ListItem::new(format!("{}{}", indentation, filename))
+            let checked_or_not = if entry.excluded { "" } else { "* " };
+            ListItem::new(format!("{}{}{}", indentation, checked_or_not, filename))
         })
         .collect();
 
@@ -215,7 +216,7 @@ fn draw_file_tree<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &mut App
     let list = List::new(items)
         .block(block)
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
-        .highlight_symbol("* ");
+        .highlight_symbol("> ");
 
     // 3. Render with the `list_state` to track selection
     f.render_stateful_widget(list, area, &mut app.file_browser_state.list_state);
