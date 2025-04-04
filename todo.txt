@@ -1,0 +1,8 @@
+* display the output in the tui itself
+* add more features to prompt editor (blinking cursor, ability to move around in the text, ability to paste)
+* add ability to specify certain shell commands that should be run with their stdout captured, to provide the ability to easily provide compiler errors, for example
+* extend the app to support conversations as opposed to a single exchange
+* make model configurable (pop up settings pane?)
+* update the file browser implementation to allow inclusion/exclusion of directories
+* add a small widget to show currently selected files
+* configurable color themes
