@@ -1,6 +1,8 @@
 use crossbeam::channel::{unbounded, Receiver};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -8,34 +10,81 @@ use ignore::WalkBuilder;
 use std::{error::Error, io, thread, time::Duration};
 use tui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    widgets::{Block, Borders, Paragraph},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
     Terminal,
 };
 
-// Each tree entry has its path, depth (for indentation), and whether it's a dir
-struct TreeEntry {
-    path: String,
-    depth: usize,
-    entry_type: EntryType,
-    excluded: bool,
-}
-
-enum EntryType {
-    Directory(DirectoryState),
-    File,
-}
-
-struct DirectoryState {
-    expanded: bool,
-}
+use lope::{
+    input::Action,
+    input::InputHandler,
+    widgets::{file_browser, options, prompt_editor},
+};
 
 // App state
 struct App {
-    file_list: Vec<TreeEntry>,
-    selected_file_idx: usize,
-    prompt_text: String,
+    selected_widget: Widget,
+    file_browser_state: file_browser::State,
+    prompt_editor_state: prompt_editor::State,
+    options_state: options::State,
+}
+
+impl InputHandler for App {
+    fn process_key(&mut self, input: crossterm::event::KeyEvent) -> Option<Action> {
+        // switch widget if control + arrow key was pressed
+        if input.modifiers.contains(KeyModifiers::CONTROL) {
+            match input.code {
+                KeyCode::Char('h') => {
+                    if let Widget::PromptEditor = self.selected_widget {
+                        self.selected_widget = Widget::FileBrowser;
+                    }
+                }
+                KeyCode::Char('l') => {
+                    if let Widget::FileBrowser = self.selected_widget {
+                        self.selected_widget = Widget::PromptEditor;
+                    }
+                }
+                KeyCode::Char('k') => {
+                    if let Widget::Options = self.selected_widget {
+                        self.selected_widget = Widget::PromptEditor;
+                    }
+                }
+                KeyCode::Char('j') => {
+                    self.selected_widget = match self.selected_widget {
+                        Widget::PromptEditor | Widget::FileBrowser => Widget::Options,
+                        _ => self.selected_widget.clone(),
+                    };
+                }
+                KeyCode::Char('c') => {
+                    return Some(Action::Quit);
+                }
+                _ => {}
+            }
+            return None;
+        }
+
+        match self.selected_widget {
+            Widget::FileBrowser => self.file_browser_state.process_key(input),
+            Widget::PromptEditor => self.prompt_editor_state.process_key(input),
+            Widget::Options => self.options_state.process_key(input),
+        }
+    }
+
+    fn process_tick(&mut self) {
+        match self.selected_widget {
+            Widget::FileBrowser => self.file_browser_state.process_tick(),
+            Widget::PromptEditor => self.prompt_editor_state.process_tick(),
+            Widget::Options => self.options_state.process_tick(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
+enum Widget {
+    FileBrowser,
+    PromptEditor,
+    Options,
 }
 
 // Event wrapper for crossbeam
@@ -64,58 +113,15 @@ impl App {
             // Convert to string for TUI display
             let path = entry.path().display().to_string();
 
-            entries.push(TreeEntry {
-                path,
-                depth,
-                entry_type: match is_dir {
-                    true => EntryType::Directory(DirectoryState { expanded: true }),
-                    false => EntryType::File,
-                },
-                excluded: false,
-            });
+            entries.push(file_browser::TreeEntry::new(path, depth, is_dir));
         }
 
         Self {
-            file_list: entries,
-            selected_file_idx: 0,
-            prompt_text: String::new(),
+            selected_widget: Widget::PromptEditor,
+            file_browser_state: file_browser::State::new(entries),
+            prompt_editor_state: prompt_editor::State::default(),
+            options_state: options::State::default(),
         }
-    }
-
-    fn on_up(&mut self) {
-        if self.selected_file_idx > 0 {
-            self.selected_file_idx -= 1;
-        }
-    }
-
-    fn on_down(&mut self) {
-        if self.selected_file_idx < self.file_list.len().saturating_sub(1) {
-            self.selected_file_idx += 1;
-        }
-    }
-
-    fn on_right(&mut self) {
-        if let Some(entry) = self.file_list.get_mut(self.selected_file_idx) {
-            if let EntryType::Directory(ref mut dir_state) = entry.entry_type {
-                dir_state.expanded = true;
-            }
-        }
-    }
-
-    fn on_left(&mut self) {
-        if let Some(entry) = self.file_list.get_mut(self.selected_file_idx) {
-            if let EntryType::Directory(ref mut dir_state) = entry.entry_type {
-                dir_state.expanded = false;
-            }
-        }
-    }
-
-    fn on_key(&mut self, c: char) {
-        self.prompt_text.push(c);
-    }
-
-    fn on_backspace(&mut self) {
-        self.prompt_text.pop();
     }
 }
 
@@ -152,29 +158,28 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Main loop
     loop {
-        terminal.draw(|f| ui(f, &app))?;
+        terminal.draw(|f| ui(f, &mut app))?;
 
         match rx.recv()? {
             Event::Input(event) => {
                 if let CEvent::Key(key_event) = event {
-                    match key_event.code {
-                        KeyCode::Char('q') => {
-                            // Exit on 'q'
-                            break;
+                    if let Some(action) = app.process_key(key_event) {
+                        match action {
+                            Action::Send => {
+                                // Handle sending the prompt
+                                println!(
+                                    "Sending prompt: {}",
+                                    app.prompt_editor_state.get_display_text()
+                                );
+                            }
+                            Action::Quit => {
+                                break;
+                            }
                         }
-                        KeyCode::Up => app.on_up(),
-                        KeyCode::Down => app.on_down(),
-                        KeyCode::Right => app.on_right(),
-                        KeyCode::Left => app.on_left(),
-                        KeyCode::Char(c) => app.on_key(c),
-                        KeyCode::Backspace => app.on_backspace(),
-                        _ => {}
                     }
                 }
             }
-            Event::Tick => {
-                // Periodic tasks if needed
-            }
+            Event::Tick => app.process_tick(),
         }
     }
 
@@ -187,71 +192,83 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// UI layout
-fn ui<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &App) {
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
-        .split(f.size());
-
-    draw_file_tree(f, app, chunks[0]);
-    draw_prompt_editor(f, app, chunks[1]);
-}
-
 // Draw the file tree with indentation
-fn draw_file_tree<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &App, area: Rect) {
-    let mut collapsed_stack = Vec::new();
-    let mut lines = Vec::new();
+fn draw_file_tree<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &mut App, area: Rect) {
+    let mut block = Block::default().borders(Borders::ALL).title("File Browser");
 
-    for (idx, entry) in app.file_list.iter().enumerate() {
-        // Pop from the stack if we've gone back above a collapsed directory's depth.
-        while let Some(&collapsed_depth) = collapsed_stack.last() {
-            if entry.depth <= collapsed_depth {
-                collapsed_stack.pop();
-            } else {
-                break;
-            }
-        }
-
-        // If we're still within a collapsed parent, skip
-        if !collapsed_stack.is_empty() {
-            continue;
-        }
-
-        // Otherwise, we render this entry
-        let indentation = " ".repeat(entry.depth * 2);
-        let filename = entry.path.split('/').last().unwrap_or("UNKNOWN");
-        let line = if idx == app.selected_file_idx {
-            format!("> {} {}", indentation, filename)
-        } else {
-            format!("  {} {}", indentation, filename)
-        };
-        lines.push(line);
-
-        // If *this* entry is a collapsed directory, push its depth
-        if let EntryType::Directory(ref dir_state) = entry.entry_type {
-            if !dir_state.expanded {
-                collapsed_stack.push(entry.depth);
-            }
-        }
+    if app.selected_widget == Widget::FileBrowser {
+        block = block.border_type(BorderType::Thick);
     }
 
-    let text = lines.join("\n");
+    let visible_idxs = app.file_browser_state.visible_entries();
+    let items: Vec<ListItem> = visible_idxs
+        .iter()
+        .map(|&idx| {
+            let entry = &app.file_browser_state.file_list[idx];
+            let indentation = " ".repeat(entry.depth * 2);
+            let filename = entry.path.split('/').last().unwrap_or("UNKNOWN");
+            ListItem::new(format!("{}{}", indentation, filename))
+        })
+        .collect();
 
-    let block = Block::default().borders(Borders::ALL).title("File Tree");
-    let paragraph = Paragraph::new(text)
+    // 2. Build the `List` widget
+    let list = List::new(items)
         .block(block)
-        .style(Style::default().fg(Color::White));
-    f.render_widget(paragraph, area);
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+        .highlight_symbol("* ");
+
+    // 3. Render with the `list_state` to track selection
+    f.render_stateful_widget(list, area, &mut app.file_browser_state.list_state);
 }
 
 // Draw the prompt editor
 fn draw_prompt_editor<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &App, area: Rect) {
-    let block = Block::default()
+    let mut block = Block::default()
         .borders(Borders::ALL)
         .title("Prompt Editor");
-    let paragraph = Paragraph::new(app.prompt_text.as_ref())
+    if app.selected_widget == Widget::PromptEditor {
+        block = block.border_type(BorderType::Thick);
+    }
+    let paragraph = Paragraph::new(app.prompt_editor_state.get_display_text())
         .block(block)
         .style(Style::default().fg(Color::Yellow));
     f.render_widget(paragraph, area);
+}
+
+fn draw_bottom_options<B: tui::backend::Backend>(
+    f: &mut tui::Frame<B>,
+    app: &App,
+    area: tui::layout::Rect,
+) {
+    let mut block = Block::default().borders(Borders::ALL).title("Options");
+    if app.selected_widget == Widget::Options {
+        block = block.border_type(BorderType::Thick);
+    }
+
+    // Center the text within the block
+    let paragraph = Paragraph::new(app.options_state.get_display_text())
+        .block(block)
+        .style(Style::default().fg(Color::Green))
+        .alignment(Alignment::Center);
+
+    f.render_widget(paragraph, area);
+}
+
+fn ui<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &mut App) {
+    // First, split the screen vertically so we can have a thin pane at the bottom
+    let vertical_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        // The top pane takes all remaining space (Min), bottom pane has a fixed height of 3
+        .constraints([Constraint::Min(0), Constraint::Length(3)])
+        .split(f.size());
+
+    // Now, split the top pane horizontally for the file tree and prompt editor
+    let main_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+        .split(vertical_chunks[0]);
+
+    draw_file_tree(f, app, main_chunks[0]);
+    draw_prompt_editor(f, app, main_chunks[1]);
+    draw_bottom_options(f, app, vertical_chunks[1]);
 }
