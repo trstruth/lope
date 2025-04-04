@@ -1,5 +1,7 @@
 # Lope
 
+![image](https://github.com/user-attachments/assets/9f12b984-1835-4bb0-b559-bfc15d2385b4)
+
 Lope is your friendly terminal-based companion for improving workflow efficiency when tackling programming tasks. It’s designed from the ground up to give you intuitive access to tools and features that help you focus on the code, not the clutter.
 
 Effortlessly browse files, manipulate prompt text, and send rich queries to integrated services—right from within the terminal! Think of it as an interactive control hub that feels smooth, minimal, and surprisingly capable.
