@@ -4,15 +4,15 @@ use crate::{
     widgets::options::AppOption,
 };
 
-use tui::{
+use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Span, Spans},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
 
 // Draw the file tree with indentation
-pub fn draw_file_tree<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &mut App, area: Rect) {
+pub fn draw_file_tree(f: &mut ratatui::Frame, app: &mut App, area: Rect) {
     let mut block = Block::default().borders(Borders::ALL).title("File Browser");
 
     if app.selected_widget == Widget::FileBrowser {
@@ -48,7 +48,7 @@ pub fn draw_file_tree<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &mut
 }
 
 // Draw the prompt editor
-pub fn draw_prompt_editor<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &App, area: Rect) {
+pub fn draw_prompt_editor(f: &mut ratatui::Frame, app: &App, area: Rect) {
     let mut block = Block::default()
         .borders(Borders::ALL)
         .title("Prompt Editor");
@@ -61,15 +61,12 @@ pub fn draw_prompt_editor<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: 
     f.render_widget(paragraph, area);
 }
 
-pub fn draw_bottom_options<B: tui::backend::Backend>(
-    f: &mut tui::Frame<B>,
-    app: &App,
-    area: tui::layout::Rect,
-) {
+pub fn draw_bottom_options(f: &mut ratatui::Frame, app: &App, area: Rect) {
     let mut block = Block::default()
         .borders(Borders::ALL)
         .title("Options")
         .style(Style::default().bg(theme::GRAY));
+
     if app.selected_widget == Widget::Options {
         block = block.border_type(BorderType::Thick)
     }
@@ -98,7 +95,9 @@ pub fn draw_bottom_options<B: tui::backend::Backend>(
         },
     ];
 
-    let paragraph = Paragraph::new(Spans::from(spans))
+    let text = Text::from(Line::from(spans));
+
+    let paragraph = Paragraph::new(text)
         .block(block)
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::Gray));
@@ -106,13 +105,13 @@ pub fn draw_bottom_options<B: tui::backend::Backend>(
     f.render_widget(paragraph, area);
 }
 
-pub fn ui<B: tui::backend::Backend>(f: &mut tui::Frame<B>, app: &mut App) {
+pub fn ui(f: &mut ratatui::Frame, app: &mut App) {
     // First, split the screen vertically so we can have a thin pane at the bottom
     let vertical_chunks = Layout::default()
         .direction(Direction::Vertical)
         // The top pane takes all remaining space (Min), bottom pane has a fixed height of 3
         .constraints([Constraint::Min(0), Constraint::Length(3)])
-        .split(f.size());
+        .split(f.area());
 
     // Now, split the top pane horizontally for the file tree and prompt editor
     let main_chunks = Layout::default()

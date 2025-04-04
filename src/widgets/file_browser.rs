@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent};
-use tui::widgets::ListState;
+use ratatui::widgets::ListState;
 
 use crate::input::InputHandler;
 
